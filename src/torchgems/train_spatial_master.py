@@ -251,11 +251,11 @@ class train_spatial_model_master:
         if odd_iteration:
             model_gen_send = self.model_gen2
             model_gen_recv = self.model_gen1
-            # flat_params_recv = torch.zeros([self.model1_size],requires_grad=False,device='cuda')
+            # flat_params_recv = torch.zeros([self.model1_size],requires_grad=False,device="cuda")
         else:
             model_gen_send = self.model_gen1
             model_gen_recv = self.model_gen2
-            # flat_params_recv = torch.zeros([self.model2_size],requires_grad=False,device='cuda')
+            # flat_params_recv = torch.zeros([self.model2_size],requires_grad=False,device="cuda")
 
         torch.cuda.synchronize()
 
@@ -325,8 +325,8 @@ class train_spatial_model_master:
             self.flat_grads_model2 += flat_grads_recv
 
     def run_step_allreduce(self, inputs, labels, odd_iteration):
-        inputs = inputs.to("cuda:0")
-        labels = labels.to("cuda:0")
+        inputs = inputs.to("cuda")
+        labels = labels.to("cuda")
 
         parts_size = int(self.batch_size / self.parts)
 
@@ -458,7 +458,7 @@ class train_spatial_model_master:
         loss, correct = 0, 0
         # torch.cuda.empty_cache()
 
-        # self.train_model1.models = self.train_model1.models.to('cuda')
+        # self.train_model1.models = self.train_model1.models.to("cuda")
         temp_loss, temp_correct = self.train_model1.run_step(
             inputs[: self.batch_size], labels[: self.batch_size]
         )
@@ -468,7 +468,7 @@ class train_spatial_model_master:
         # torch.cuda.empty_cache()
 
         # self.train_model1.models = self.train_model1.models.to('cpu')
-        # self.train_model2.models = self.train_model2.models.to('cuda')
+        # self.train_model2.models = self.train_model2.models.to("cuda")
         temp_loss, temp_correct = self.train_model2.run_step(
             inputs[self.batch_size : 2 * self.batch_size],
             labels[self.batch_size : 2 * self.batch_size],

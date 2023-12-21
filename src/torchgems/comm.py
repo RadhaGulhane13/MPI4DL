@@ -40,6 +40,40 @@ def initialize_cuda():
 
     torch.cuda.init()
 
+def mpi_discovery(distributed_port=29500, verbose=True):
+    """
+    Discovery MPI environment via mpi4py and map to relevant dist state
+    """
+    from mpi4py import MPI
+    import subprocess
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    world_size = comm.Get_size()
+    print("inside mpi_discovery....")
+
+    master_addr = None
+    if rank == 0:
+        hostname_cmd = ["hostname -I"]
+        result = subprocess.check_output(hostname_cmd, shell=True)
+        master_addr = result.decode("utf-8").split()[0]
+    master_addr = comm.bcast(master_addr, root=0)
+
+    # Determine local rank by assuming hostnames are unique
+    proc_name = MPI.Get_processor_name()
+    all_procs = comm.allgather(proc_name)
+    local_rank = sum([i == proc_name for i in all_procs[:rank]])
+
+    os.environ["RANK"] = str(rank)
+    os.environ["WORLD_SIZE"] = str(world_size)
+    os.environ["LOCAL_RANK"] = str(local_rank)
+    os.environ["MASTER_ADDR"] = master_addr
+    os.environ["MASTER_PORT"] = str(distributed_port)
+    os.environ["NCCL_IB_PCI_RELAXED_ORDERING"] = "0"
+    os.environ['NCCL_IB_DISABLE']= str(1)
+    os.environ['NCCL_SOCKET_IFNAME'] = "eth0"
+    print(f" RANK : {rank}  WORLD_SIZE : {world_size} LOCAL_RANK : {local_rank} MASTER_ADDR :{master_addr} MASTER_PORT : {distributed_port} NCCL_SOCKET_IFNAME : {os.environ.get('NCCL_SOCKET_IFNAME', -1)}")
+
 
 class MPIComm:
     def __init__(
@@ -70,7 +104,7 @@ class MPIComm:
             self.rank = dist.get_rank()
             self.size = dist.get_world_size()
         else:
-            self.size, self.rank = self.init_comm(backend="mpi")
+            self.size, self.rank = self.init_comm(backend="nccl")
 
         self.local_rank = self.rank % self.mp_size
 
@@ -151,8 +185,10 @@ class MPIComm:
         else:
             return math.floor(local_rank / num_spatial_parts_list)
 
-    def init_comm(self, backend="mpi"):
+    def init_comm(self, backend="nccl"):
         """Initialize the distributed environment."""
+        if backend == "nccl":
+            mpi_discovery()
         dist.init_process_group(backend)
         size = dist.get_world_size()
         rank = dist.get_rank()
